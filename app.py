@@ -56,7 +56,7 @@ custom_css = """
         box-shadow: 0 4px 8px rgba(211, 47, 47, 0.3);
     }
 
-    /* Sekundäre Buttons (z. B. Filter/Zurück) */
+    /* Sekundäre Buttons */
     .secondary-btn button {
         background-color: #EEEEEE !important;
         color: #212121 !important;
@@ -90,40 +90,6 @@ custom_css = """
         margin-top: 2px;
     }
 
-    /* Floating / Fixed Bottom Navigation Bar Styling */
-    .bottom-nav {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 90%;
-        max-width: 500px;
-        background-color: #FFFFFF;
-        border-radius: 30px;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-        display: flex;
-        justify-content: space-around;
-        align-items: center;
-        padding: 8px 15px;
-        z-index: 9999;
-        border: 1px solid #E0E0E0;
-    }
-    
-    .nav-item {
-        text-align: center;
-        color: #666;
-        font-size: 0.8rem;
-        font-weight: 600;
-        cursor: pointer;
-        padding: 6px 16px;
-        border-radius: 20px;
-    }
-    
-    .nav-item.active {
-        background-color: #D32F2F;
-        color: white;
-    }
-
     /* Status & Benachrichtigung */
     .lost-badge {
         background-color: #D32F2F;
@@ -138,11 +104,11 @@ custom_css = """
 st.markdown(custom_css, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. MODEL LOADING & FALLBACK PREDICTION
+# 2. MODEL LOADING & PREDICTION (KOMPATIBEL MIT TEACHABLE MACHINE & KERAS 2/3)
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def load_keras_model():
-    """Versucht das Teachable Machine Modell und Labels zu laden."""
+    """Lädt das Teachable Machine Modell mit tf_keras Kompatibilität."""
     model_path = "keras_model.h5"
     labels_path = "labels.txt"
     
@@ -151,10 +117,16 @@ def load_keras_model():
     
     if os.path.exists(model_path):
         try:
-            import tensorflow as tf
-            model = tf.keras.models.load_model(model_path, compile=False)
-        except Exception as e:
-            st.warning(f"Fehler beim Laden von Keras Modell: {e}")
+            # Nutze tf_keras für alte Teachable Machine / Keras 2 H5-Dateien
+            import tf_keras as keras
+            model = keras.models.load_model(model_path, compile=False)
+        except Exception as e1:
+            try:
+                # Fallback auf Standard-TensorFlow/Keras
+                import tensorflow as tf
+                model = tf.keras.models.load_model(model_path, compile=False)
+            except Exception as e2:
+                st.warning(f"Fehler beim Laden des Keras Modells: {e2}")
             
     if os.path.exists(labels_path):
         try:
@@ -168,10 +140,7 @@ def load_keras_model():
 model, labels = load_keras_model()
 
 def classify_image(image: Image.Image):
-    """
-    Klassifiziert das hochgeladene Bild per Keras-Modell.
-    Nutzt Fallback-Klassifizierung, falls Modell nicht geladen werden konnte.
-    """
+    """Klassifiziert das hochgeladene Bild per Keras-Modell."""
     if model is not None and len(labels) > 0:
         # Preprocessing laut Teachable Machine
         size = (224, 224)
@@ -186,15 +155,15 @@ def classify_image(image: Image.Image):
         class_name = labels[index]
         confidence_score = float(prediction[0][index])
         
-        # Bereinigen von Labels z.B. "0 Schlüssel" -> "Schlüssel"
+        # Entfernt führende Nummern aus Teachable Machine Labels (z.B. "0 Schlüssel" -> "Schlüssel")
         clean_label = class_name.split(' ', 1)[-1] if ' ' in class_name else class_name
         return clean_label, confidence_score
     else:
-        # Fallback Mock Prediction
+        # Fallback Prediction, falls Modell nicht geladen wurde
         return "Schlüsselbund / Zubehör", 0.95
 
 # -----------------------------------------------------------------------------
-# 3. SESSION STATE INITIALIZATION (DATENBANK-DUMMY)
+# 3. SESSION STATE INITIALIZATION (IN-MEMORY DATENBANK)
 # -----------------------------------------------------------------------------
 if "current_screen" not in st.session_state:
     st.session_state.current_screen = "Suchen"
@@ -243,7 +212,7 @@ if "items_db" not in st.session_state:
     ]
 
 # -----------------------------------------------------------------------------
-# 4. HEADER COMPONENT (GEEIGNET FÜR ALLE SCREENS)
+# 4. HEADER COMPONENT
 # -----------------------------------------------------------------------------
 def render_header(title_override=None, show_back=False):
     col_back, col_title, col_settings = st.columns([1, 4, 1])
@@ -269,12 +238,11 @@ def render_header(title_override=None, show_back=False):
     st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 5. BOTTOM NAVIGATION BAR (FIXED)
+# 5. BOTTOM NAVIGATION BAR
 # -----------------------------------------------------------------------------
 def render_bottom_nav():
-    st.markdown("<br><br><br>", unsafe_allow_html=True)  # Spacer
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
     
-    # Bottom Nav Bar mit Streamlit Columns nachbilden
     nav_container = st.container()
     with nav_container:
         st.markdown("---")
@@ -284,20 +252,20 @@ def render_bottom_nav():
         
         with c1:
             lbl1 = "🔍 Suchen (Aktiv)" if current == "Suchen" else "🔍 Suchen"
-            if st.button(lbl1, use_container_width=True, key="nav_suchen"):
+            if st.button(lbl1, width="stretch", key="nav_suchen"):
                 st.session_state.current_screen = "Suchen"
                 st.session_state.selected_item_id = None
                 st.rerun()
                 
         with c2:
             lbl2 = "➕ HINZUFÜGEN (Aktiv)" if current == "Hinzufügen" else "➕ Hinzufügen"
-            if st.button(lbl2, use_container_width=True, key="nav_hinzufuegen"):
+            if st.button(lbl2, width="stretch", key="nav_hinzufuegen"):
                 st.session_state.current_screen = "Hinzufügen"
                 st.rerun()
                 
         with c3:
             lbl3 = "🏷️ Vermisst (Aktiv)" if current == "Vermisst" else "🏷️ Vermisst [LOST]"
-            if st.button(lbl3, use_container_width=True, key="nav_vermisst"):
+            if st.button(lbl3, width="stretch", key="nav_vermisst"):
                 st.session_state.current_screen = "Vermisst"
                 st.rerun()
 
@@ -307,10 +275,8 @@ def render_bottom_nav():
 def screen_suchen():
     render_header()
     
-    # Schnellsuchleiste
     search_query = st.text_input("🔍 Gegenstand Suchen...", placeholder="z. B. Schlüssel, Sporttasche, Blau...")
     
-    # Gezielte Filter-Kategorien in Expander/Akkordeon
     with st.expander("Filter hinzufügen ▽", expanded=False):
         col_cat, col_col, col_brand, col_loc = st.columns(4)
         
@@ -325,7 +291,6 @@ def screen_suchen():
 
     st.markdown("### Fundstücke Galerie")
     
-    # Daten filtern
     filtered_items = st.session_state.items_db
     
     if search_query:
@@ -344,16 +309,15 @@ def screen_suchen():
         st.info("Keine passenden Fundstücke gefunden.")
         return
 
-    # 3-Spalten Grid Galerie
     cols = st.columns(3)
     for idx, item in enumerate(filtered_items):
         col = cols[idx % 3]
         with col:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             if item.get("image_url"):
-                st.image(item["image_url"], use_container_width=True)
+                st.image(item["image_url"], width="stretch")
             elif item.get("image_data"):
-                st.image(item["image_data"], use_container_width=True)
+                st.image(item["image_data"], width="stretch")
             
             st.markdown(f"<div class='card-title'>{item['title']}</div>", unsafe_allow_html=True)
             st.markdown(f"<div class='card-tags'>Tags: {item['tags']}</div>", unsafe_allow_html=True)
@@ -382,9 +346,9 @@ def screen_detail():
     with col_img:
         st.markdown("### BILDER")
         if item.get("image_url"):
-            st.image(item["image_url"], use_container_width=True)
+            st.image(item["image_url"], width="stretch")
         elif item.get("image_data"):
-            st.image(item["image_data"], use_container_width=True)
+            st.image(item["image_data"], width="stretch")
             
     with col_info:
         st.markdown(f"## {item['title']}")
@@ -426,7 +390,6 @@ def screen_hinzufuegen():
     if uploaded_image:
         st.image(uploaded_image, caption="Hochgeladenes Bild", width=300)
         
-        # KI-Erkennung durchführen
         with st.spinner("KI analysiert das Bild..."):
             detected_category, confidence = classify_image(uploaded_image)
             
@@ -437,7 +400,7 @@ def screen_hinzufuegen():
     
     with st.form("form_add_item"):
         title_input = st.text_input("Vorgeschlagener KI Titel (Anpassbar)", value=detected_category if detected_category else "")
-        tags_input = st.text_input("Vorgeschlagene KI Tags (Anpassbar)", value=f"{detected_category}, Fundstück, Katharinum")
+        tags_input = st.text_input("Vorgeschlagene KI Tags (Anpassbar)", value=f"{detected_category}, Fundstück, Katharineum" if detected_category else "Fundstück, Katharineum")
         location_input = st.text_input("Findungsort", placeholder="z. B. Schulhof, Turnhalle, Raum 204")
         storage_input = st.text_input("Ort der Aufbewahrung", placeholder="z. B. Sekretariat, Hausmeister")
         finder_input = st.text_input("Name vom Finder", placeholder="Dein Name / Klasse (Optional)")
@@ -488,14 +451,13 @@ def screen_vermisst():
         st.info(f"Erkannte Kategorie: **{predicted_cat}**")
         st.markdown("### 🔍 ÄHNLICHE BILDER IN DER DATENBANK")
         
-        # Ähnliche Items aus der DB filtern
         matches = [i for i in st.session_state.items_db if predicted_cat.lower() in i['title'].lower() or predicted_cat.lower() in i['tags'].lower()]
         
         if matches:
             cols = st.columns(len(matches))
             for idx, match in enumerate(matches):
                 with cols[idx]:
-                    st.image(match.get('image_url') or match.get('image_data'), use_container_width=True)
+                    st.image(match.get('image_url') or match.get('image_data'), width="stretch")
                     st.caption(f"**{match['title']}**\nOrt: {match['location']}")
         else:
             st.warning("Aktuell kein exakter KI-Treffer in der Datenbank vorhanden.")
