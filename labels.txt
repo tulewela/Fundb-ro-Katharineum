@@ -1,0 +1,6 @@
+0 Helm
+1 Tshirt
+2 Hoodie
+3 Hose
+4 Sonstiges
+5 Mütze
